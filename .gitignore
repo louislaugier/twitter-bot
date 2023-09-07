@@ -1,0 +1,7 @@
+.env
+
+cookies.json
+Makefile
+
+.DS_Store
+tmp
