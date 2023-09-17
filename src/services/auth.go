@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/louislaugier/twitter-bot/src/scraper"
+	"github.com/louislaugier/twitter-bot/src/services/scraper"
 )
 
 // Login export
@@ -41,5 +41,7 @@ func loadCookies(scraper *scraper.Scraper) {
 	cookies := []*http.Cookie{}
 	json.NewDecoder(f).Decode(&cookies)
 
-	scraper.SetCookies(cookies)
+	if cookies != nil {
+		scraper.SetCookies(cookies)
+	}
 }

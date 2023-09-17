@@ -1,8 +1,19 @@
 version: '3.8'
 services:
-  app:
+  freelancechain:
     build:
       context: .
       dockerfile: Dockerfile.dev.app
     volumes:
       - ./:/go/src/twitter-bot
+    environment:
+      - service=freelancechain
+  # webstudio:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev.app
+  #   volumes:
+  #     - ./:/go/src/twitter-bot
+  #   environment:
+  #     - service=webstudio
+      
