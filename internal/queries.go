@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/louislaugier/twitter-bot/internal/scraper"
 )
@@ -19,6 +21,12 @@ func getFollowers(s *scraper.Scraper, userID string, cursor string) ([]string, s
 
 	resp, err := s.RequestAPI(req, nil)
 	if err != nil {
+		if strings.Contains(err.Error(), "Too Many Requests") {
+			time.Sleep(time.Minute * 5)
+
+			return getFollowers(s, userID, cursor)
+		}
+
 		return nil, "", err
 	}
 
@@ -53,6 +61,12 @@ func isFollowingOrPending(s *scraper.Scraper, userID string) (bool, error) {
 
 	resp, err := s.RequestAPI(req, nil)
 	if err != nil {
+		if strings.Contains(err.Error(), "Too Many Requests") {
+			time.Sleep(time.Minute * 5)
+
+			return isFollowingOrPending(s, userID)
+		}
+
 		return false, err
 	}
 

@@ -35,9 +35,7 @@ func InitAutofollow() error {
 		for _, v := range IDs {
 			isFollowingOrPending, err := isFollowingOrPending(scraper, v)
 			if err != nil {
-				if strings.Contains(err.Error(), "Too Many Requests") {
-					time.Sleep(time.Minute * 5)
-				}
+				continue
 			}
 
 			if !isFollowingOrPending && err == nil {
@@ -45,11 +43,7 @@ func InitAutofollow() error {
 
 				if err != nil {
 					log.Printf("Failed to follow %s: %s", v, err)
-					if strings.Contains(err.Error(), "unable to follow more people at this time") {
-						time.Sleep(time.Minute * 30)
-					} else {
-						continue
-					}
+					continue
 				}
 			}
 		}
@@ -72,7 +66,14 @@ func followUser(s *scraper.Scraper, userID string) error {
 
 	_, err = s.RequestAPI(req, nil)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "unable to follow more people at this time") {
+			log.Println(err)
+			time.Sleep(time.Minute * 30)
+
+			return followUser(s, userID)
+		} else {
+			return err
+		}
 	}
 
 	log.Printf("Followed %s successfully", userID)
