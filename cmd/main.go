@@ -5,11 +5,11 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/louislaugier/twitter-bot/src/services"
+	services "github.com/louislaugier/twitter-bot/internal"
 )
 
 func main() {
-	godotenv.Load(fmt.Sprintf("%s.env", os.Getenv("service")))
+	godotenv.Load(fmt.Sprintf("../%s.env", os.Getenv("service")))
 
 	err := services.InitAutofollow()
 	if err != nil {

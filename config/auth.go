@@ -1,11 +1,11 @@
-package services
+package config
 
 import (
 	"encoding/json"
 	"net/http"
 	"os"
 
-	"github.com/louislaugier/twitter-bot/src/services/scraper"
+	"github.com/louislaugier/twitter-bot/internal/scraper"
 )
 
 // Login export

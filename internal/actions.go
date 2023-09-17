@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/louislaugier/twitter-bot/src/services/scraper"
+	"github.com/louislaugier/twitter-bot/config"
+	"github.com/louislaugier/twitter-bot/internal/scraper"
 )
 
 // InitAutofollow export
 func InitAutofollow() error {
-	scraper, err := Login()
+	scraper, err := config.Login()
 	if err != nil {
 		return err
 	}

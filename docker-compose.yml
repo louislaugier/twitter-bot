@@ -3,7 +3,7 @@ services:
   freelancechain:
     build:
       context: .
-      dockerfile: Dockerfile.dev.app
+      dockerfile: Dockerfile.dev
     volumes:
       - ./:/go/src/twitter-bot
     environment:
@@ -11,7 +11,7 @@ services:
   # webstudio:
   #   build:
   #     context: .
-  #     dockerfile: Dockerfile.dev.app
+  #     dockerfile: Dockerfile.dev
   #   volumes:
   #     - ./:/go/src/twitter-bot
   #   environment:

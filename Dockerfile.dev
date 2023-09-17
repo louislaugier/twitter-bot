@@ -8,4 +8,6 @@ COPY . .
 
 RUN go mod download && go install github.com/cosmtrek/air@latest
 
+WORKDIR /go/src/twitter-bot/cmd
+
 CMD ["air", "."]
