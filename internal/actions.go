@@ -23,6 +23,10 @@ func InitAutofollow() error {
 	if err != nil {
 		return err
 	}
+	selfUserID, err := getUserID(scraper, os.Getenv("TWITTER_HANDLE"))
+	if err != nil {
+		return err
+	}
 
 	nextCursor := "-1"
 
@@ -38,7 +42,12 @@ func InitAutofollow() error {
 				continue
 			}
 
-			if !isFollowingOrPending && err == nil {
+			isFollower, err := isFollower(scraper, selfUserID, v)
+			if err != nil {
+				continue
+			}
+
+			if !isFollowingOrPending && err == nil && !isFollower {
 				err = followUser(scraper, v)
 
 				if err != nil {
@@ -56,6 +65,45 @@ func InitAutofollow() error {
 	}
 
 	return InitAutofollow()
+}
+
+// InitAutofollow export
+func InitAutounfollow() error {
+	scraper, err := config.Login()
+	if err != nil {
+		return err
+	}
+
+	accountIDToGetFollowersFrom, err := getUserID(scraper, "freelancechain")
+	if err != nil {
+		return err
+	}
+
+	nextCursor := "-1"
+
+	for {
+		IDs, newNextCursor, err := getFollowing(scraper, accountIDToGetFollowersFrom, nextCursor)
+		if err != nil {
+			return err
+		}
+
+		for _, v := range IDs {
+			err = unfollowUser(scraper, v)
+
+			if err != nil {
+				log.Printf("Failed to unfollow %s: %s", v, err)
+				continue
+			}
+		}
+
+		if newNextCursor == "0" {
+			break
+		}
+
+		nextCursor = newNextCursor
+	}
+
+	return InitAutounfollow()
 }
 
 func followUser(s *scraper.Scraper, userID string) error {
@@ -77,6 +125,22 @@ func followUser(s *scraper.Scraper, userID string) error {
 	}
 
 	log.Printf("Followed %s successfully", userID)
+
+	return nil
+}
+
+func unfollowUser(s *scraper.Scraper, userID string) error {
+	req, err := http.NewRequest("POST", fmt.Sprintf("https://api.twitter.com/1.1/friendships/destroy.json?user_id=%s", userID), nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.RequestAPI(req, nil)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Unfollowed %s successfully", userID)
 
 	return nil
 }

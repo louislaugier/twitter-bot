@@ -53,6 +53,46 @@ func getFollowers(s *scraper.Scraper, userID string, cursor string) ([]string, s
 	return followers, nextCursor, nil
 }
 
+func getFollowing(s *scraper.Scraper, userID string, cursor string) ([]string, string, error) {
+	url := fmt.Sprintf("https://api.twitter.com/1.1/friends/ids.json?user_id=%s&cursor=%s&count=5", userID, cursor)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	resp, err := s.RequestAPI(req, nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "Too Many Requests") {
+			time.Sleep(time.Minute * 5)
+			return getFollowing(s, userID, cursor)
+		}
+		return nil, "", err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, "", err
+	}
+
+	var following []string
+	if ids, ok := result["ids"].([]interface{}); ok {
+		for _, id := range ids {
+			if idFloat, ok := id.(float64); ok {
+				idStr := strconv.FormatFloat(idFloat, 'f', 0, 64)
+				following = append(following, idStr)
+			}
+		}
+	}
+
+	nextCursor := ""
+	if nextCursorStr, ok := result["next_cursor_str"].(string); ok {
+		nextCursor = nextCursorStr
+	}
+
+	return following, nextCursor, nil
+}
+
 func isFollowingOrPending(s *scraper.Scraper, userID string) (bool, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.twitter.com/1.1/friendships/show.json?target_id=%s", userID), nil)
 	if err != nil {
@@ -87,6 +127,41 @@ func isFollowingOrPending(s *scraper.Scraper, userID string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func isFollower(s *scraper.Scraper, sourceID, targetID string) (bool, error) {
+	url := fmt.Sprintf("https://api.twitter.com/1.1/friendships/show.json?source_id=%s&target_id=%s", sourceID, targetID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := s.RequestAPI(req, nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "Too Many Requests") {
+			time.Sleep(time.Minute * 5)
+			return isFollower(s, sourceID, targetID)
+		}
+		return false, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return false, err
+	}
+
+	relationship, ok := result["relationship"].(map[string]interface{})
+	if !ok {
+		return false, fmt.Errorf("Unable to get relationship information")
+	}
+
+	following, ok := relationship["target"].(map[string]interface{})["followed_by"].(bool)
+	if !ok {
+		return false, fmt.Errorf("Unable to determine follow status")
+	}
+
+	return following, nil
 }
 
 func getUserID(s *scraper.Scraper, username string) (string, error) {

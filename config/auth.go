@@ -29,14 +29,14 @@ func Login() (*scraper.Scraper, error) {
 func saveCookies(scraper *scraper.Scraper) {
 	cookies := scraper.GetCookies()
 
-	f, _ := os.Create("cookies.json")
+	f, _ := os.Create("../cookies.json")
 	js, _ := json.Marshal(cookies)
 
 	f.Write(js)
 }
 
 func loadCookies(scraper *scraper.Scraper) {
-	f, _ := os.Open("cookies.json")
+	f, _ := os.Open("../cookies.json")
 
 	cookies := []*http.Cookie{}
 	json.NewDecoder(f).Decode(&cookies)

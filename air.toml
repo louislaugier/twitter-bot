@@ -1,0 +1,11 @@
+# The root directory of your Go project
+root = "./"
+
+# The entry point of your application
+[build]
+# Specify the main file (main.go) location relative to the project root
+entry = "cmd/main.go"
+
+# Additional paths to ignore
+[build.ignore]
+dirs = ["_test"]

@@ -12,6 +12,7 @@ func main() {
 	godotenv.Load(fmt.Sprintf("../%s.env", os.Getenv("service")))
 
 	err := services.InitAutofollow()
+	// err := services.InitAutounfollow()
 	if err != nil {
 		panic(err)
 	}
