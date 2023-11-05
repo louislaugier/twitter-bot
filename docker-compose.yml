@@ -8,12 +8,6 @@ services:
       - ./:/go/src/twitter-bot
     environment:
       - service=freelancechain
-  # webstudio:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.dev
-  #   volumes:
-  #     - ./:/go/src/twitter-bot
-  #   environment:
-  #     - service=webstudio
+    ports:
+      - 80:80
       

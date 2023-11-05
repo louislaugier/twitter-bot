@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 
@@ -15,6 +16,7 @@ func Login() (*scraper.Scraper, error) {
 	loadCookies(scraper)
 
 	if !scraper.IsLoggedIn() {
+		log.Println("not ok")
 		err := scraper.Login(os.Getenv("TWITTER_HANDLE"), os.Getenv("TWITTER_PWD"))
 		if err != nil {
 			return nil, err

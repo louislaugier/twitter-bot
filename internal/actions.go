@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,17 +14,21 @@ import (
 )
 
 // InitAutofollow export
-func InitAutofollow() error {
+func InitAutofollow(sc *scraper.Scraper) error {
 	scraper, err := config.Login()
 	if err != nil {
+		log.Println(err)
 		return err
 	}
+	if sc != nil {
+		scraper = sc
+	}
 
-	accountIDToGetFollowersFrom, err := getUserID(scraper, os.Getenv("TWITTER_HANDLE_TO_FOLLOW_FOLLOWERS_FROM"))
+	accountIDToGetFollowersFrom, err := GetUserID(scraper, os.Getenv("TWITTER_HANDLE_TO_FOLLOW_FOLLOWERS_FROM"))
 	if err != nil {
 		return err
 	}
-	selfUserID, err := getUserID(scraper, os.Getenv("TWITTER_HANDLE"))
+	selfUserID, err := GetUserID(scraper, os.Getenv("TWITTER_HANDLE"))
 	if err != nil {
 		return err
 	}
@@ -39,20 +44,26 @@ func InitAutofollow() error {
 		for _, v := range IDs {
 			isFollowingOrPending, err := isFollowingOrPending(scraper, v)
 			if err != nil {
+				log.Println(err)
+				log.Println("Non-existing account or bot")
 				continue
 			}
 
 			isFollower, err := isFollower(scraper, selfUserID, v)
-			if err != nil {
+			if err != nil || isFollower {
 				continue
 			}
 
-			if !isFollowingOrPending && err == nil && !isFollower {
+			if !isFollowingOrPending && err == nil {
 				err = followUser(scraper, v)
 
 				if err != nil {
-					log.Printf("Failed to follow %s: %s", v, err)
-					continue
+					time.Sleep(time.Minute * 15)
+					err = followUser(scraper, v)
+					if err != nil {
+						log.Printf("Failed to follow %s: %s", v, err)
+						continue
+					}
 				}
 			}
 		}
@@ -64,7 +75,7 @@ func InitAutofollow() error {
 		nextCursor = newNextCursor
 	}
 
-	return InitAutofollow()
+	return InitAutofollow(sc)
 }
 
 // InitAutofollow export
@@ -74,7 +85,7 @@ func InitAutounfollow() error {
 		return err
 	}
 
-	accountIDToGetFollowersFrom, err := getUserID(scraper, "freelancechain")
+	accountIDToGetFollowersFrom, err := GetUserID(scraper, "freelancechain")
 	if err != nil {
 		return err
 	}
@@ -104,6 +115,92 @@ func InitAutounfollow() error {
 	}
 
 	return InitAutounfollow()
+}
+
+// InitAutoDM export
+func InitAutoDM(sc *scraper.Scraper) error {
+	scraper, err := config.Login()
+	if err != nil {
+		return err
+	}
+	if sc != nil {
+		scraper = sc
+	}
+
+	selfUserID, err := GetUserID(scraper, os.Getenv("TWITTER_HANDLE"))
+	if err != nil {
+		return err
+	}
+
+	log.Println(selfUserID)
+
+	// Read user IDs from the file and store them in a set
+	// excludedUserIDs, err := readExcludedUserIDsFromFile("../exclude-dm.txt")
+	// if err != nil {
+	// 	return err
+	// }
+
+	nextCursor := "-1"
+
+	for {
+		IDs, newNextCursor, err := getFollowers(scraper, selfUserID, nextCursor)
+		if err != nil {
+			return err
+		}
+		log.Println(IDs)
+
+		for _, v := range IDs {
+			// Check if the user ID is in the excluded set, if not, send the direct message
+			// if _, excluded := excludedUserIDs[v]; !excluded {
+			// Use the recursive function to send the direct message
+			err := SendDirectMessage(scraper, v, "https://twitter.com/FreelanceChain/status/1719718728802156593")
+			if err != nil {
+				log.Println(err)
+				log.Println("error triggered, checking if user exists")
+				username, err := GetUsername(scraper, v)
+				if err != nil {
+					log.Println("non existing user, dismissing error & user")
+					continue
+				}
+
+				log.Println("user exists:", username)
+				SendDirectMessageRecursive(scraper, v, "https://twitter.com/FreelanceChain/status/1719718728802156593")
+			}
+			// } else {
+			// 	println("excluded")
+			// }
+		}
+
+		if newNextCursor == "0" {
+			break
+		}
+
+		nextCursor = newNextCursor
+	}
+
+	return nil
+}
+
+// readExcludedUserIDsFromFile reads user IDs from the given file and returns them in a set
+func readExcludedUserIDsFromFile(filename string) (map[string]struct{}, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	excludedUserIDs := make(map[string]struct{})
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		userID := scanner.Text()
+		excludedUserIDs[userID] = struct{}{}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return excludedUserIDs, nil
 }
 
 func followUser(s *scraper.Scraper, userID string) error {
@@ -143,4 +240,49 @@ func unfollowUser(s *scraper.Scraper, userID string) error {
 	log.Printf("Unfollowed %s successfully", userID)
 
 	return nil
+}
+
+func SendDirectMessage(s *scraper.Scraper, userID, message string) error {
+	url := "https://api.twitter.com/1.1/direct_messages/events/new.json"
+	body := fmt.Sprintf(`{
+		"event": {
+			"type": "message_create",
+			"message_create": {
+				"target": {
+					"recipient_id": "%s"
+				},
+				"message_data": {
+					"text": "%s"
+				}
+			}
+		}
+	}`, userID, message)
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err = s.RequestAPI(req, nil)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Sent direct message to user %s: %s", userID, message)
+
+	return nil
+}
+
+func SendDirectMessageRecursive(scraper *scraper.Scraper, userID string, message string) error {
+	err := SendDirectMessage(scraper, userID, message)
+	if err != nil {
+		log.Println(err)
+		println("Too many requests, sleeping and retrying in 15 mins...")
+		time.Sleep(time.Minute * 15)
+		// Retry sending the direct message recursively
+		err = SendDirectMessageRecursive(scraper, userID, message)
+	}
+	return err
 }

@@ -164,7 +164,7 @@ func isFollower(s *scraper.Scraper, sourceID, targetID string) (bool, error) {
 	return following, nil
 }
 
-func getUserID(s *scraper.Scraper, username string) (string, error) {
+func GetUserID(s *scraper.Scraper, username string) (string, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.twitter.com/1.1/users/show.json?screen_name=%s", username), nil)
 	if err != nil {
 		return "", err
@@ -187,7 +187,7 @@ func getUserID(s *scraper.Scraper, username string) (string, error) {
 	return "", fmt.Errorf("Failed to parse response")
 }
 
-func getUsername(s *scraper.Scraper, userID string) (string, error) {
+func GetUsername(s *scraper.Scraper, userID string) (string, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.twitter.com/1.1/users/show.json?user_id=%s", userID), nil)
 	if err != nil {
 		return "", err
