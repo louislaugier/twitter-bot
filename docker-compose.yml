@@ -8,6 +8,4 @@ services:
       - ./:/go/src/twitter-bot
     environment:
       - service=freelancechain
-    ports:
-      - 80:80
       
