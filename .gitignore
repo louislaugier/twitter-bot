@@ -6,3 +6,5 @@ tweeter-id.json
 
 .DS_Store
 tmp
+
+*.csv
