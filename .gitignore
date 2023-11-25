@@ -1,7 +1,8 @@
 *.env
 !example.env
 
-cookies.json
+freelancechain.json
+tweeter-id.json
 
 .DS_Store
 tmp

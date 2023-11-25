@@ -2,7 +2,7 @@ package config
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -16,7 +16,6 @@ func Login() (*scraper.Scraper, error) {
 	loadCookies(scraper)
 
 	if !scraper.IsLoggedIn() {
-		log.Println("not ok")
 		err := scraper.Login(os.Getenv("TWITTER_HANDLE"), os.Getenv("TWITTER_PWD"))
 		if err != nil {
 			return nil, err
@@ -31,14 +30,14 @@ func Login() (*scraper.Scraper, error) {
 func saveCookies(scraper *scraper.Scraper) {
 	cookies := scraper.GetCookies()
 
-	f, _ := os.Create("../cookies.json")
+	f, _ := os.Create(fmt.Sprintf("../%s.json", os.Getenv("service")))
 	js, _ := json.Marshal(cookies)
 
 	f.Write(js)
 }
 
 func loadCookies(scraper *scraper.Scraper) {
-	f, _ := os.Open("../cookies.json")
+	f, _ := os.Open(fmt.Sprintf("../%s.json", os.Getenv("service")))
 
 	cookies := []*http.Cookie{}
 	json.NewDecoder(f).Decode(&cookies)

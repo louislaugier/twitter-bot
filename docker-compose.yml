@@ -8,4 +8,12 @@ services:
       - ./:/go/src/twitter-bot
     environment:
       - service=freelancechain
+  tweeter-id:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./:/go/src/twitter-bot
+    environment:
+      - service=tweeter-id
       

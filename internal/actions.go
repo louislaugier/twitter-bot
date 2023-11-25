@@ -79,13 +79,8 @@ func InitAutofollow(sc *scraper.Scraper) error {
 }
 
 // InitAutofollow export
-func InitAutounfollow() error {
-	scraper, err := config.Login()
-	if err != nil {
-		return err
-	}
-
-	accountIDToGetFollowersFrom, err := GetUserID(scraper, "freelancechain")
+func InitAutounfollow(scraper *scraper.Scraper) error {
+	accountIDToGetFollowersFrom, err := GetUserID(scraper, os.Getenv("TWITTER_HANDLE"))
 	if err != nil {
 		return err
 	}
@@ -114,7 +109,7 @@ func InitAutounfollow() error {
 		nextCursor = newNextCursor
 	}
 
-	return InitAutounfollow()
+	return InitAutounfollow(scraper)
 }
 
 // InitAutoDM export
