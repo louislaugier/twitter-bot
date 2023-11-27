@@ -83,49 +83,50 @@ func dialTimeout(addr string, timeout time.Duration) (*smtp.Client, error) {
 }
 
 func ValidateEmailAddress(email string) error {
-	// _, host := split(email)
+	_, host := split(email)
 
 	if err := validateFormat(email); err != nil {
 		return err
 	}
 
-	// client, err := validateHost(host)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer client.Close()
+	client, err := validateHost(host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
 
-	// err = client.Hello(host)
-	// if err != nil {
-	// 	return err
-	// }
+	err = client.Hello(host)
+	if err != nil {
+		return err
+	}
 
-	// err = client.Mail(email)
-	// if err != nil {
-	// 	return err
-	// }
+	err = client.Mail(email)
+	if err != nil {
+		return err
+	}
 
-	// err = client.Rcpt(email)
-	// if err != nil {
-	// 	return err
-	// }
+	err = client.Rcpt(email)
+	if err != nil {
+		return err
+	}
 
 	// w, err := client.Data()
 	// if err != nil {
-	// 	return newSmtpError(err)
+	// 	return err
 	// }
 
+	// ID := uuid.New()
 	// message := []byte(
 	// 	fmt.Sprintf(("From: Your Name <your_email@example.com>\r\n" +
 	// 		"To: Recipient <%s>\r\n" +
 	// 		"Subject: A subject\r\n" +
-	// 		"Message-ID: <unique-message-id>\r\n" +
-	// 		"\r\n"), email),
+	// 		"Message-ID: <%s>\r\n" +
+	// 		"\r\n"), email, ID),
 	// )
 
 	// _, err = w.Write(message)
 	// if err != nil {
-	// 	return newSmtpError(err)
+	// 	return err
 	// }
 
 	// w.Close()
@@ -163,17 +164,20 @@ func GetValidEmailsFromCSVIntoNewCSV(inputPath string, outputPath string) {
 	var wg sync.WaitGroup
 
 	// Start a worker pool to validate emails.
-	for i := 0; i < 10; i++ { // Worker pool size can be adjusted.
+	for i := 0; i < 16; i++ { // Worker pool size can be adjusted.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for ewl := range validEmailsChan {
-				if err := ValidateEmailAddress(ewl.Email); err == nil {
-					mu.Lock()
-					validEmails = append(validEmails, ewl.Email)
-					mu.Unlock()
-				} else {
-					log.Printf("Invalid email on line %d: %s\n", ewl.LineNumber, ewl.Email)
+				if err := ValidateEmailAddress(ewl.Email); err == nil || strings.Contains(err.Error(), "553 ") || strings.Contains(err.Error(), "Spamhaus") || strings.Contains(err.Error(), "block") || strings.Contains(err.Error(), "Block") || strings.Contains(err.Error(), "spam") || strings.Contains(err.Error(), "Spam") || strings.Contains(err.Error(), "DNS") || strings.Contains(err.Error(), "dns") || strings.Contains(err.Error(), "abus") {
+					if !strings.Contains(err.Error(), "DNS response contained records which contain invalid names") && !strings.Contains(err.Error(), "501") {
+						mu.Lock()
+						log.Printf("Valid email on line %d: %s.\n", ewl.LineNumber, ewl.Email)
+						validEmails = append(validEmails, ewl.Email)
+						mu.Unlock()
+					}
+				} else if ewl.Email != "EMAIL" {
+					log.Printf("Invalid email on line %d: %s. Error: %s\n", ewl.LineNumber, ewl.Email, err)
 				}
 			}
 		}()
@@ -220,10 +224,12 @@ func GetValidEmailsFromCSVIntoNewCSV(inputPath string, outputPath string) {
 	defer outputFile.Close()
 
 	writer := csv.NewWriter(outputFile)
+	// writer.Comma = ';'
 	defer writer.Flush()
 
+	writer.Write([]string{"EMAIL" + ";"})
 	for _, validEmail := range validEmails {
-		if err := writer.Write([]string{validEmail}); err != nil {
+		if err := writer.Write([]string{validEmail + ";"}); err != nil {
 			log.Printf("Error writing to CSV: %v\n", err)
 			return
 		}
