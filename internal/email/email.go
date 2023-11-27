@@ -1,13 +1,17 @@
 package email
 
 import (
-	"errors"
+	"encoding/csv"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -17,25 +21,9 @@ const (
 )
 
 var (
-	ErrBadFormat        = errors.New("invalid format")
-	ErrUnresolvableHost = errors.New("unresolvable host")
-	EmailRegexp         = regexp.MustCompile(`(?m)^(((((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?"((\s? +)?(([!#-[\]-~])|(\\([ -~]|\s))))*(\s? +)?"))?)?(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?<(((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?"((\s? +)?(([!#-[\]-~])|(\\([ -~]|\s))))*(\s? +)?"))@((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?\[((\s? +)?([!-Z^-~]))*(\s? +)?\]((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)))>((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?))|(((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?"((\s? +)?(([!#-[\]-~])|(\\([ -~]|\s))))*(\s? +)?"))@((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?\[((\s? +)?([!-Z^-~]))*(\s? +)?\]((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?))))$`)
-	CommonUsernames     = []string{"contact", "team", "marketing", "info", "infos", "information", "informations", "commercial", "rh", "hr", "recrutement", "support", "admin", "webmaster", "feedback", "help", "sales", "billing", "hello", "career", "careers"}
+	EmailRegexp     = regexp.MustCompile(`(?m)^(((((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?"((\s? +)?(([!#-[\]-~])|(\\([ -~]|\s))))*(\s? +)?"))?)?(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?<(((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?"((\s? +)?(([!#-[\]-~])|(\\([ -~]|\s))))*(\s? +)?"))@((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?\[((\s? +)?([!-Z^-~]))*(\s? +)?\]((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)))>((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?))|(((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?"((\s? +)?(([!#-[\]-~])|(\\([ -~]|\s))))*(\s? +)?"))@((((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?(([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+(\.([A-Za-z0-9!#-'*+\/=?^_\x60{|}~-])+)*)((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?)|(((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?\[((\s? +)?([!-Z^-~]))*(\s? +)?\]((((\s? +)?(\(((\s? +)?(([!-'*-[\]-~]*)|(\\([ -~]|\s))))*(\s? +)?\)))(\s? +)?)|(\s? +))?))))$`)
+	CommonUsernames = []string{"contact", "team", "marketing", "info", "infos", "information", "informations", "commercial", "rh", "hr", "recrutement", "support", "admin", "webmaster", "feedback", "help", "sales", "billing", "hello", "career", "careers"}
 )
-
-type smtpError struct {
-	Err error
-}
-
-func (e smtpError) Error() string {
-	return e.Err.Error()
-}
-
-func newSmtpError(err error) smtpError {
-	return smtpError{
-		Err: err,
-	}
-}
 
 func split(email string) (account, host string) {
 	i := strings.LastIndexByte(email, '@')
@@ -51,7 +39,7 @@ func validateFormat(email string) error {
 	_, err := mail.ParseAddress(email)
 	// if err != nil || !EmailRegexp.MatchString(strings.ToLower(email)) || strings.Contains(email, "no-reply") || strings.Contains(email, "noreply") || strings.Contains(email, "no_reply") {
 	if err != nil || !EmailRegexp.MatchString(strings.ToLower(email)) {
-		return ErrBadFormat
+		return err
 	}
 
 	return nil
@@ -65,7 +53,7 @@ func validateHost(host string) (*smtp.Client, error) {
 
 	client, err := dialTimeout(fmt.Sprintf("%s:%d", hosts[0], SmtpPort), ForceDisconnectAfter)
 	if err != nil {
-		return nil, newSmtpError(err)
+		return nil, err
 	}
 
 	return client, nil
@@ -74,7 +62,7 @@ func validateHost(host string) (*smtp.Client, error) {
 func getMX(emailOrHost string) ([]string, error) {
 	mx, err := net.LookupMX(emailOrHost)
 	if err != nil {
-		return nil, ErrUnresolvableHost
+		return nil, err
 	}
 	var hosts []string
 	for _, mxRecord := range mx {
@@ -95,32 +83,32 @@ func dialTimeout(addr string, timeout time.Duration) (*smtp.Client, error) {
 }
 
 func ValidateEmailAddress(email string) error {
-	_, host := split(email)
+	// _, host := split(email)
 
 	if err := validateFormat(email); err != nil {
 		return err
 	}
 
-	client, err := validateHost(host)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
+	// client, err := validateHost(host)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer client.Close()
 
-	err = client.Hello(host)
-	if err != nil {
-		return newSmtpError(err)
-	}
+	// err = client.Hello(host)
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = client.Mail(email)
-	if err != nil {
-		return newSmtpError(err)
-	}
+	// err = client.Mail(email)
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = client.Rcpt(email)
-	if err != nil {
-		return newSmtpError(err)
-	}
+	// err = client.Rcpt(email)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// w, err := client.Data()
 	// if err != nil {
@@ -128,11 +116,11 @@ func ValidateEmailAddress(email string) error {
 	// }
 
 	// message := []byte(
-	// 	"From: Your Name <your_email@example.com>\r\n" +
-	// 		"To: Recipient <recipient@example.com>\r\n" +
-	// 		"Subject: \r\n" +
-	// 		"Message-ID: <unique-message-id@example.com>\r\n" +
-	// 		"\r\n",
+	// 	fmt.Sprintf(("From: Your Name <your_email@example.com>\r\n" +
+	// 		"To: Recipient <%s>\r\n" +
+	// 		"Subject: A subject\r\n" +
+	// 		"Message-ID: <unique-message-id>\r\n" +
+	// 		"\r\n"), email),
 	// )
 
 	// _, err = w.Write(message)
@@ -140,10 +128,104 @@ func ValidateEmailAddress(email string) error {
 	// 	return newSmtpError(err)
 	// }
 
-	// err = w.Close()
-	// if err != nil {
-	// 	return newSmtpError(err)
-	// }
+	// w.Close()
 
 	return nil
+}
+
+func GetValidEmailsFromCSVIntoNewCSV(inputPath string, outputPath string) {
+	type EmailWithLine struct {
+		Email      string
+		LineNumber int
+	}
+
+	file, err := os.Open(inputPath)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.Comma = ';' // Assuming each email is separated by a semicolon.
+
+	// Buffered channel to store valid emails.
+	validEmailsChan := make(chan EmailWithLine, 100)
+
+	// Channel to signal when all processing is done.
+	doneChan := make(chan struct{})
+
+	// Slice to hold valid emails after validation.
+	var validEmails []string
+
+	// Mutex to protect access to validEmails slice.
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Start a worker pool to validate emails.
+	for i := 0; i < 10; i++ { // Worker pool size can be adjusted.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ewl := range validEmailsChan {
+				if err := ValidateEmailAddress(ewl.Email); err == nil {
+					mu.Lock()
+					validEmails = append(validEmails, ewl.Email)
+					mu.Unlock()
+				} else {
+					log.Printf("Invalid email on line %d: %s\n", ewl.LineNumber, ewl.Email)
+				}
+			}
+		}()
+	}
+
+	// Go routine to wait for worker pool to finish and close done channel.
+	go func() {
+		wg.Wait()
+		close(doneChan)
+	}()
+
+	// Read from the CSV and send emails to be validated.
+	lineNumber := 1 // Initialize line number counter.
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Error reading CSV on line %d: %v\n", lineNumber, err)
+			lineNumber++
+			continue
+		}
+		emails := strings.Split(record[0], ";")
+		for _, email := range emails {
+			email = strings.TrimSpace(email)
+			if email != "" {
+				validEmailsChan <- EmailWithLine{Email: email, LineNumber: lineNumber}
+			}
+		}
+		lineNumber++
+	}
+	close(validEmailsChan)
+
+	// Waiting for all emails to be processed.
+	<-doneChan
+
+	// Now write the valid emails to the output CSV file.
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		fmt.Println("Error creating an output file:", err)
+		return
+	}
+	defer outputFile.Close()
+
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
+
+	for _, validEmail := range validEmails {
+		if err := writer.Write([]string{validEmail}); err != nil {
+			log.Printf("Error writing to CSV: %v\n", err)
+			return
+		}
+	}
 }
