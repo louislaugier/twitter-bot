@@ -113,7 +113,7 @@ func InitAutounfollow(scraper *scraper.Scraper) error {
 }
 
 // InitAutoDM export
-func InitAutoDM(sc *scraper.Scraper) error {
+func InitAutoDM(sc *scraper.Scraper, handle *string) error {
 	scraper, err := config.Login()
 	if err != nil {
 		return err
@@ -122,12 +122,14 @@ func InitAutoDM(sc *scraper.Scraper) error {
 		scraper = sc
 	}
 
-	selfUserID, err := GetUserID(scraper, os.Getenv("TWITTER_HANDLE"))
+	h := os.Getenv("TWITTER_HANDLE")
+	if handle != nil {
+		h = *handle
+	}
+	selfUserID, err := GetUserID(scraper, h)
 	if err != nil {
 		return err
 	}
-
-	log.Println(selfUserID)
 
 	// Read user IDs from the file and store them in a set
 	// excludedUserIDs, err := readExcludedUserIDsFromFile("../exclude-dm.txt")
@@ -142,24 +144,31 @@ func InitAutoDM(sc *scraper.Scraper) error {
 		if err != nil {
 			return err
 		}
-		log.Println(IDs)
 
 		for _, v := range IDs {
 			// Check if the user ID is in the excluded set, if not, send the direct message
 			// if _, excluded := excludedUserIDs[v]; !excluded {
 			// Use the recursive function to send the direct message
-			err := SendDirectMessage(scraper, v, "https://twitter.com/FreelanceChain/status/1719718728802156593")
+
+			msg := "Get an additional free $5 BTC by replying to this message with your e-mail address after making a purchase on Ledger with the ref link above! https://twitter.com/FreelanceChain/status/1731322760238961061"
+
+			err := SendDirectMessage(scraper, v, msg)
 			if err != nil {
-				log.Println(err)
+				e := err.Error()
+				if strings.Contains(e, "You cannot send messages to this user.") {
+					continue
+				}
+
 				log.Println("error triggered, checking if user exists")
 				username, err := GetUsername(scraper, v)
 				if err != nil {
-					log.Println("non existing user, dismissing error & user")
+					log.Println("non existing user, dismissing")
 					continue
 				}
 
 				log.Println("user exists:", username)
-				SendDirectMessageRecursive(scraper, v, "https://twitter.com/FreelanceChain/status/1719718728802156593")
+
+				SendDirectMessageRecursive(scraper, v, msg)
 			}
 			// } else {
 			// 	println("excluded")
@@ -209,6 +218,11 @@ func followUser(s *scraper.Scraper, userID string) error {
 		if strings.Contains(err.Error(), "unable to follow more people at this time") {
 			log.Println(err)
 			time.Sleep(time.Minute * 30)
+
+			return followUser(s, userID)
+		} else if strings.Contains(err.Error(), "account is temporarily locked") {
+			log.Println(err)
+			time.Sleep(time.Hour * 72)
 
 			return followUser(s, userID)
 		} else {
@@ -265,7 +279,8 @@ func SendDirectMessage(s *scraper.Scraper, userID, message string) error {
 		return err
 	}
 
-	log.Printf("Sent direct message to user %s: %s", userID, message)
+	// log.Printf("Sent direct message to user %s: %s", userID, message)
+	log.Printf("Sent direct message to user %s.", userID)
 
 	return nil
 }

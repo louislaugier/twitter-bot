@@ -169,13 +169,11 @@ func GetValidEmailsFromCSVIntoNewCSV(inputPath string, outputPath string) {
 		go func() {
 			defer wg.Done()
 			for ewl := range validEmailsChan {
-				if err := ValidateEmailAddress(ewl.Email); err == nil || strings.Contains(err.Error(), "553 ") || strings.Contains(err.Error(), "Spamhaus") || strings.Contains(err.Error(), "block") || strings.Contains(err.Error(), "Block") || strings.Contains(err.Error(), "spam") || strings.Contains(err.Error(), "Spam") || strings.Contains(err.Error(), "DNS") || strings.Contains(err.Error(), "dns") || strings.Contains(err.Error(), "abus") {
-					if !strings.Contains(err.Error(), "DNS response contained records which contain invalid names") && !strings.Contains(err.Error(), "501") {
-						mu.Lock()
-						log.Printf("Valid email on line %d: %s.\n", ewl.LineNumber, ewl.Email)
-						validEmails = append(validEmails, ewl.Email)
-						mu.Unlock()
-					}
+				if err := ValidateEmailAddress(ewl.Email); err == nil {
+					mu.Lock()
+					log.Printf("Valid email on line %d: %s.\n", ewl.LineNumber, ewl.Email)
+					validEmails = append(validEmails, ewl.Email)
+					mu.Unlock()
 				} else if ewl.Email != "EMAIL" {
 					log.Printf("Invalid email on line %d: %s. Error: %s\n", ewl.LineNumber, ewl.Email, err)
 				}

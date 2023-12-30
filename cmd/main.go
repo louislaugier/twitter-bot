@@ -2,22 +2,38 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/louislaugier/twitter-bot/internal/email"
+	"github.com/louislaugier/twitter-bot/config"
+	services "github.com/louislaugier/twitter-bot/internal"
 )
 
 func main() {
+	service := os.Getenv("service")
 	godotenv.Load(fmt.Sprintf("../%s.env", os.Getenv("service")))
 
-	// scraper, err := config.Login()
-	// if err != nil {
-	// 	log.Println(err)
-	// }
+	scraper, err := config.Login()
+	if err != nil {
+		log.Println(err)
+	}
 
-	// services.InitAutofollow(scraper)
-	// services.InitAutounfollow(scraper)
+	if service == "freelancechain" {
 
-	email.GetValidEmailsFromCSVIntoNewCSV("input.csv", "output.csv")
+		// go services.InitAutoDM(scraper, func() *string {
+		// 	str := "binance"
+		// 	return &str
+		// }())
+		// go services.InitAutoDM(scraper, nil)
+
+		services.InitAutofollow(scraper)
+		// services.InitAutounfollow(scraper)
+	} else if service == "tweeter-id" {
+		services.InitAutofollow(scraper)
+		// services.InitAutounfollow(scraper)
+
+	}
+
+	// email.GetValidEmailsFromCSVIntoNewCSV("input.csv", "output.csv")
 }
