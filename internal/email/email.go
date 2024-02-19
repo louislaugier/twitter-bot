@@ -175,16 +175,83 @@ func ValidateEmailAddressFromAPI(email string) error {
 		return err
 	}
 
-	reachability, ok := responseMap["is_reachable"]
+	// reachability, ok := responseMap["is_reachable"]
+	// if !ok {
+	// 	return errors.New("'is_reachable' field not present in API response")
+	// }
+
+	// if ok && (reachability == "safe" || reachability == "risky") {
+	// 	return nil
+	// }
+
+	// return fmt.Errorf("reachability %s", reachability)
+
+	mx, ok := responseMap["mx"]
 	if !ok {
-		return errors.New("'is_reachable' field not present in API response")
+		return errors.New("'mx' field not present in API response")
 	}
 
-	if ok && (reachability == "safe" || reachability == "risky") {
+	mxAccepting, ok := mx.(map[string]interface{})["accepts_mail"]
+	if !ok {
+		return errors.New("mx not accepting emails")
+	}
+
+	if ok && mxAccepting == true {
 		return nil
 	}
 
-	return fmt.Errorf("reachability %s", reachability)
+	return errors.New("mx not accepting emails")
+}
+
+func ValidateEmailAddressFromAPIWithProxyList(email string, proxies []string) error {
+	for _, p := range proxies {
+		proxy := strings.Split(p, ":")
+
+		r, err := http.Post("http://localhost:8080/v0/check_email", "application/json", bytes.NewBuffer([]byte(fmt.Sprintf(`
+		{
+			"to_email": "%s",
+    		"from_email": "hello@tweeter-id.com",
+    		"hello_name": "mail.tweeter-id.com",
+			"proxy": {
+				"host": "%s",
+				"port": %s
+			}
+		}
+	`, email, proxy[0], proxy[1]))))
+		if err != nil {
+			log.Println("Error requesting API:", err)
+			continue
+		}
+		defer r.Body.Close()
+
+		responseMap := map[string]interface{}{}
+		err = json.NewDecoder(r.Body).Decode(&responseMap)
+		if err != nil {
+			log.Println("Error decoding API response:", err)
+			continue
+		}
+
+		// mx, ok := responseMap["mx"]
+		_, ok := responseMap["mx"]
+		if !ok {
+			log.Println("'mx' field not present in API response")
+			continue
+		}
+
+		reachability, ok := responseMap["is_reachable"]
+		if !ok {
+			return errors.New("'is_reachable' field not present in API response")
+		}
+
+		if reachability == "safe" || reachability == "risky" {
+			log.Println("proxy working:", p)
+			return nil
+		}
+
+		log.Printf("proxy (%s) may not be working, reachability: %s", p, reachability)
+	}
+
+	return nil
 }
 
 // run plusieurs fois, check output count (different?)
@@ -216,6 +283,22 @@ func GetValidEmailsFromCSVIntoNewCSV(inputPath string, outputPath string) {
 	// Mutex to protect access to validEmails slice.
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+
+	// proxyFile, err := os.Open("proxies.txt")
+	// if err != nil {
+	// 	fmt.Println("Error opening proxy file:", err)
+	// 	return
+	// }
+	// defer proxyFile.Close()
+	// scanner := bufio.NewScanner(proxyFile)
+	// var proxies []string
+	// for scanner.Scan() {
+	// 	proxies = append(proxies, scanner.Text())
+	// }
+	// if err := scanner.Err(); err != nil {
+	// 	fmt.Println("Error scanning proxies:", err)
+	// 	return
+	// }
 
 	// Start a worker pool to validate emails.
 	for i := 0; i < 16; i++ { // Worker pool size can be adjusted.
